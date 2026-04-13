@@ -68,7 +68,6 @@ from fastapi.security.api_key import APIKeyHeader
 from starlette.status import HTTP_403_FORBIDDEN
 from scraper.auth import cookie_manager
 from config import settings
-from scraper.engine import ScraperEngine
 
 router = APIRouter()
 
@@ -101,6 +100,7 @@ async def get_usage():
 
 @router.post("/v1/profile", response_model=ProfileResponse)
 async def scrape_profile(request: ProfileRequest, api_key: str = Depends(get_api_key)):
+    from scraper.engine import ScraperEngine
     engine = ScraperEngine()
     stats = cookie_manager.get_usage_stats()
     
