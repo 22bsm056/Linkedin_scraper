@@ -1,8 +1,8 @@
 import random
+import os
 from playwright.async_api import async_playwright, Browser, BrowserContext, Page
 from playwright_stealth import stealth_async
 from config import settings
-from scraper.auth import cookie_manager
 
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
@@ -40,22 +40,12 @@ class BrowserManager:
         )
 
     async def new_page(self) -> tuple[BrowserContext, Page]:
+        storage_state = "session.json" if os.path.exists("session.json") else None
         context = await self.browser.new_context(
             user_agent=random.choice(USER_AGENTS),
-            viewport={"width": random.randint(1366, 1920), "height": random.randint(768, 1080)}
+            viewport={"width": random.randint(1366, 1920), "height": random.randint(768, 1080)},
+            storage_state=storage_state
         )
-        
-        # Inject li_at cookie if available
-        li_at = cookie_manager.get_current_cookie()
-        if li_at:
-            await context.add_cookies([
-                {
-                    "name": "li_at",
-                    "value": li_at,
-                    "domain": ".linkedin.com",
-                    "path": "/"
-                }
-            ])
 
         page = await context.new_page()
         await stealth_async(page)
