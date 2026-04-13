@@ -52,7 +52,7 @@ class BrowserManager:
                 {
                     "name": "li_at",
                     "value": li_at,
-                    "domain": ".www.linkedin.com",
+                    "domain": ".linkedin.com",
                     "path": "/"
                 }
             ])

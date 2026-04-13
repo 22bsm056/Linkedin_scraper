@@ -16,9 +16,13 @@ async def main():
     print("Scraping started...")
     try:
         data = await engine.scrape(req)
+        # We also want to save the html for debugging
+        # Wait, the engine script doesn't expose html. Let's just catch data
         print("Data scraped successfully!")
         print(data.model_dump_json(indent=2))
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         print(f"Error scraping: {e}")
 
 if __name__ == "__main__":

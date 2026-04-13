@@ -12,20 +12,21 @@ class ScraperEngine:
             context, page = await manager.new_page()
             
             # Go to profile
-            response = await page.goto(request.url, wait_until="domcontentloaded", timeout=30000)
-            
-            if response is None:
-                raise Exception("Failed to load page")
+            try:
+                response = await page.goto(request.url, wait_until="domcontentloaded", timeout=20000)
+            except Exception as e:
+                print(f"goto timed out or failed: {e}")
+                response = None
                 
             # Basic Error Checking based on HTTP status or URL redirects
-            if response.status == 404:
+            if response is not None and response.status == 404:
                 raise Exception("404 Not Found: Profile doesn't exist or URL is invalid.")
                 
             url = page.url
             if "authwall" in url or "login" in url:
                 raise Exception("403 Forbidden: Account restricted or profile is completely private. (Authwall detected)")
                 
-            if response.status == 429:
+            if response is not None and response.status == 429:
                 raise Exception("429 Too Many Requests: Proxy IP burned or rate limit reached.")
             
             # Human Emulation: Random delays and natural scrolling
@@ -35,6 +36,8 @@ class ScraperEngine:
             
             # Extract HTML
             html = await page.content()
+            with open('scraped.html', 'w', encoding='utf-8') as f:
+                f.write(html)
             
             # Parse HTML
             parser = ProfileParser(html, request.url)
