@@ -91,12 +91,33 @@ class ScraperEngine:
             try:
                 # Use domcontentloaded as networkidle often times out on LinkedIn due to background telemetry
                 await page.goto(profile_url, wait_until="domcontentloaded", timeout=45000)
-                await asyncio.sleep(5) # Give it some time to settle
+                await asyncio.sleep(3) # Initial settle
+                
+                # Check for redirect or landing page error
+                current_url = page.url.lower().rstrip('/')
+                if "/in/" not in current_url:
+                    print(f"WARNING: Unexpected landing page: {current_url}")
+                    await page.screenshot(path="wrong_landing.png")
+                
+                # Wait for the main identity card (Top Card)
+                # LinkedIn often loads the skeletal page first then rehydrates
+                print("Waiting for profile identity card...")
+                try:
+                    await page.wait_for_selector("[componentkey*='Topcard'], .profile-top-card, #workspace", timeout=15000)
+                except:
+                    print("Note: Specific top-card selector not found, proceeding with raw DOM.")
+
+                await self._scroll_page(page)
+                await asyncio.sleep(2)
             except Exception as e:
                 print(f"Navigation fallback: {e}")
 
-            await self._scroll_page(page)
             main_html = await page.content()
+            
+            # Diagnostic: Extract name from page title to log what we found
+            page_title = await page.title()
+            print(f"Found Page: '{page_title}'")
+            
             with open("scraped.html", "w", encoding="utf-8") as f:
                 f.write(main_html)
 

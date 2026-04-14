@@ -1,38 +1,46 @@
-# Environments
+# Environment & Secrets
 .env
 .env.*
 !.env.example
-.venv
+.venv/
 env/
 venv/
 venv311/
 ENV/
-env.bak/
-venv.bak/
+*.bak/
 
-# Byte-compiled / optimized / DLL files
+# Python Runtime
 __pycache__/
 *.py[cod]
 *$py.class
+.pytest_cache/
+.coverage
+htmlcov/
 
-# Playwright
+# Playwright & Browser Session
+browser_data/
 playwright-log/
 *.log
-
-# Scraped data
-*.csv
-*.json
-*.html
-*.png
 screenshot.png
-session.json
+*.png
+*.jpg
+*.jpeg
 
-# Archives
-*.zip
-*.tar.gz
-*.rar
+# Scraping Captures & Debugging
+*.html
+scraped.html
+details_*.html
+full_profile_merged.html
+parsed_result.json
 
-# OS files
+# Outputs & Reports
+scraped_profile/
+scraped_profile_test/
+scratch/
+
+# IDE & OS
+.vscode/
+.idea/
 .DS_Store
 Thumbs.db
-browser_data/
+desktop.ini

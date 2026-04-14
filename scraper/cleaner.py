@@ -7,14 +7,33 @@ class ProfileCleaner:
         if not text:
             return ""
         
-        # Remove noisy "See more/less" strings
+        # 1. Unicode Map for common PDF-incompatible characters
+        unicode_map = {
+            '\u201c': '"', '\u201d': '"',  # Left/Right double quotes
+            '\u2018': "'", '\u2019': "'",  # Left/Right single quotes
+            '\u2013': '-', '\u2014': '-',  # En/Em dashes
+            '\u2026': '...',               # Ellipsis
+            '\u00a0': ' ',                 # Non-breaking space
+            '\u2022': '*',                 # Bullet point
+            '\u00b7': '-',                 # Middle dot
+            '株式会社': ' K.K. ',           # Japanese Co. Ltd.
+            '合同会社': ' G.K. ',           # Japanese LLC
+        }
+        for char, replacement in unicode_map.items():
+            text = text.replace(char, replacement)
+
+        # 2. Remove Emojis and non-Latin1 characters for FPDF Helvetica compatibility
+        # We allow standard ASCII and common Latin1 accents
+        text = text.encode('latin-1', 'ignore').decode('latin-1')
+
+        # 3. Remove noisy "See more/less" strings
         text = re.sub(r"…\s*see more", "", text, flags=re.IGNORECASE)
         text = re.sub(r"see less", "", text, flags=re.IGNORECASE)
         
-        # Remove endorsement artifacts (e.g., "· 5 endorsements")
+        # 4. Remove endorsement artifacts (e.g., "· 5 endorsements")
         text = re.sub(r"·\s*\d+\s+endorsement[s]?", "", text, flags=re.IGNORECASE)
         
-        # Remove multiple newlines and extra spaces
+        # 5. Remove multiple newlines and extra spaces
         text = re.sub(r"\n\s+", "\n", text)
         text = re.sub(r"\s{2,}", " ", text)
         
