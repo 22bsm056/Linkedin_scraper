@@ -32,10 +32,18 @@ class BrowserManager:
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
             )
             
-            # Apply stealth to the first page (or all pages if needed)
-            # persistent_context creates one page by default
+            # Persistent context creates one page by default
             if context.pages:
-                await stealth_async(context.pages[0])
+                page = context.pages[0]
+                await stealth_async(page)
+                
+                # OPTIMIZATION: Block heavy assets (images, media, fonts) to speed up loading
+                await page.route("**/*.{png,jpg,jpeg,gif,svg,mp4,webm,woff,woff2,ttf,otf}", lambda route: route.abort())
+                # Also block by type for robustness
+                await page.route(lambda url: True, lambda route: 
+                    route.abort() if route.request.resource_type in ["image", "media", "font"] 
+                    else route.continue_()
+                )
             
             try:
                 yield context

@@ -112,41 +112,44 @@ class ScraperEngine:
             except Exception as e:
                 print(f"Navigation fallback: {e}")
 
+            # 3. Capture Main Page
+            print("Capturing main profile view...")
+            await self._scroll_fast(page)
             main_html = await page.content()
             
-            # Diagnostic: Extract name from page title to log what we found
-            page_title = await page.title()
-            print(f"Found Page: '{page_title}'")
+            # 4. PARALLEL DETAIL FETCHING (High Performance)
+            # We fetch all major sections concurrently in new pages within the same context
+            print("Fetching details (Experience, Education, Skills) in parallel...")
             
-            with open("scraped.html", "w", encoding="utf-8") as f:
-                f.write(main_html)
-
-            # Step 4: Detail pages
-            detail_data = {}
-            for section in ["experience", "education", "skills"]:
-                print(f"Extracting details: {section}...")
-                section_url = f"{profile_url}/details/{section}/"
+            async def fetch_section(section_type):
+                detail_page = await context.new_page()
                 try:
-                    await page.goto(section_url, wait_until="domcontentloaded", timeout=30000)
-                    await asyncio.sleep(3)
-                    await self._scroll_page(page)
-                    html = await page.content()
-                    detail_data[section] = html
-                    with open(f"details_{section}.html", "w", encoding="utf-8") as f:
-                        f.write(html)
+                    section_url = f"{profile_url}/details/{section_type}/"
+                    await detail_page.goto(section_url, wait_until="domcontentloaded", timeout=20000)
+                    await asyncio.sleep(1) # Minimal settle
+                    await self._scroll_fast(detail_page)
+                    return await detail_page.content()
                 except Exception as e:
-                    print(f"Section {section} failed: {e}")
-                    detail_data[section] = ""
+                    print(f"Warning: Failed to fetch {section_type} detail: {e}")
+                    return ""
+                finally:
+                    await detail_page.close()
 
-            # Step 5: Merge and Parse
-            full_html = main_html
-            for section, html in detail_data.items():
-                full_html += f"\n<!-- SECTION_{section.upper()} -->\n{html}"
-
-            parser = ProfileParser(full_html, request.url)
-            result = parser.parse(request)
+            sections = ["experience", "education", "skills"]
+            html_results = await asyncio.gather(*(fetch_section(s) for s in sections))
             
-            return result
+            details_map = dict(zip(sections, html_results))
+
+            # 5. Merge and Parse
+            merged_html = main_html
+            for s_type, s_html in details_map.items():
+                if s_html:
+                    merged_html += f"\n<!-- SECTION_{s_type.upper()} -->\n{s_html}"
+
+            parser = ProfileParser(merged_html, profile_url)
+            data = parser.parse(request)
+            
+            return data
 
     async def _human_type(self, page: Page, selector: str, text: str):
         """Simulates human typing with varied speed and occasional pauses."""
@@ -170,10 +173,31 @@ class ScraperEngine:
             await asyncio.sleep(random.uniform(0.1, 0.3))
             await page.mouse.click(x, y)
 
+    async def _scroll_fast(self, page: Page):
+        """Fast scrolling to trigger lazy rehydration."""
+        await page.evaluate("""
+            async () => {
+                await new Promise((resolve) => {
+                    let totalHeight = 0;
+                    let distance = 400;
+                    let timer = setInterval(() => {
+                        let scrollHeight = document.body.scrollHeight;
+                        window.scrollBy(0, distance);
+                        totalHeight += distance;
+                        if(totalHeight >= scrollHeight){
+                            clearInterval(timer);
+                            resolve();
+                        }
+                    }, 50);
+                });
+            }
+        """)
+        await asyncio.sleep(0.5)
+
     async def _scroll_page(self, page: Page):
-        """Human-like scrolling."""
-        for _ in range(random.randint(2, 4)):
-            await page.mouse.wheel(0, random.randint(600, 1100))
-            await asyncio.sleep(random.uniform(0.7, 1.4))
+        """Standard human-like scrolling (fallback)."""
+        for _ in range(2):
+            await page.mouse.wheel(0, 800)
+            await asyncio.sleep(0.5)
         await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-        await asyncio.sleep(1)
+        await asyncio.sleep(0.5)
