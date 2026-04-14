@@ -1,5 +1,7 @@
 # Environments
 .env
+.env.*
+!.env.example
 .venv
 env/
 venv/
@@ -16,3 +18,21 @@ __pycache__/
 # Playwright
 playwright-log/
 *.log
+
+# Scraped data
+*.csv
+*.json
+*.html
+*.png
+screenshot.png
+session.json
+
+# Archives
+*.zip
+*.tar.gz
+*.rar
+
+# OS files
+.DS_Store
+Thumbs.db
+browser_data/

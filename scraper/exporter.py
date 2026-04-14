@@ -1,0 +1,144 @@
+import os
+import re
+from datetime import datetime
+from typing import Optional
+from fpdf import FPDF
+from routers.profile import ExtractedData, ProfileData, ExperienceData, EducationData, SkillData
+
+class ProfileExporter:
+    def __init__(self, output_dir: str = "scraped_profile"):
+        self.output_dir = output_dir
+        if not os.path.exists(self.output_dir):
+            os.makedirs(self.output_dir)
+
+    def generate_pdf(self, data: ExtractedData, url: str) -> str:
+        slug = self._get_slug(url)
+        filename = f"{slug}.pdf"
+        filepath = os.path.join(self.output_dir, filename)
+
+        pdf = LinkedInPDF()
+        pdf.add_page()
+        
+        # Header Section
+        pdf.header_section(data.profile)
+        
+        # Summary
+        if data.profile.summary:
+            pdf.section_title("About")
+            pdf.set_font("Helvetica", size=10)
+            pdf.multi_cell(0, 5, data.profile.summary)
+            pdf.ln(5)
+
+        # Experience
+        if data.experience:
+            pdf.section_title("Experience")
+            for exp in data.experience:
+                pdf.experience_item(exp)
+        
+        # Education
+        if data.education:
+            pdf.section_title("Education")
+            for edu in data.education:
+                pdf.education_item(edu)
+
+        # Skills
+        if data.skills:
+            pdf.section_title("Skills")
+            pdf.skills_grid(data.skills)
+
+        pdf.output(filepath)
+        return filepath
+
+    def _get_slug(self, url: str) -> str:
+        match = re.search(r'/in/([^/]+)', url)
+        if match:
+            return match.group(1).strip('/')
+        return "profile"
+
+class LinkedInPDF(FPDF):
+    def __init__(self):
+        super().__init__()
+        self.set_auto_page_break(auto=True, margin=15)
+        self._brand_color = (10, 102, 194) # LinkedIn Blue
+        self._text_color = (25, 31, 35) # Near Black
+        self._secondary_text = (102, 102, 102) # Gray
+
+    def header_section(self, profile: ProfileData):
+        self.set_font("Helvetica", "B", 24)
+        self.set_text_color(*self._brand_color)
+        full_name = f"{profile.firstName or ''} {profile.lastName or ''}".strip()
+        self.cell(0, 15, full_name, ln=True)
+        
+        self.set_font("Helvetica", size=12)
+        self.set_text_color(*self._text_color)
+        self.multi_cell(0, 6, profile.headline or "")
+        
+        self.set_font("Helvetica", size=10)
+        self.set_text_color(*self._secondary_text)
+        info_line = f"{profile.location or 'N/A'}  |  {profile.connections or 0}+ connections"
+        self.cell(0, 8, info_line, ln=True)
+        self.ln(5)
+        self.draw_line()
+
+    def section_title(self, title: str):
+        self.ln(5)
+        self.set_font("Helvetica", "B", 14)
+        self.set_text_color(*self._brand_color)
+        self.cell(0, 10, title.upper(), ln=True)
+        self.draw_line(width=0.3)
+        self.ln(3)
+
+    def experience_item(self, exp: ExperienceData):
+        self.set_font("Helvetica", "B", 11)
+        self.set_text_color(*self._text_color)
+        self.cell(0, 6, exp.title or "Untitled Role", ln=True)
+        
+        self.set_font("Helvetica", size=10)
+        self.set_text_color(*self._brand_color)
+        self.cell(0, 5, exp.company or "Unknown Company", ln=True)
+        
+        self.set_font("Helvetica", "I", 9)
+        self.set_text_color(*self._secondary_text)
+        self.cell(0, 5, exp.duration or "", ln=True)
+        
+        if exp.description:
+            self.set_font("Helvetica", size=9)
+            self.set_text_color(*self._text_color)
+            self.ln(1)
+            self.multi_cell(0, 4, exp.description)
+        
+        self.ln(4)
+
+    def education_item(self, edu: EducationData):
+        self.set_font("Helvetica", "B", 11)
+        self.set_text_color(*self._text_color)
+        self.cell(0, 6, edu.school or "Unknown School", ln=True)
+        
+        self.set_font("Helvetica", size=10)
+        self.set_text_color(*self._brand_color)
+        degree_line = f"{edu.degree or ''} {edu.field or ''}".strip()
+        if degree_line:
+            self.cell(0, 5, degree_line, ln=True)
+        
+        self.ln(3)
+
+    def skills_grid(self, skills: List[SkillData]):
+        self.set_font("Helvetica", size=10)
+        self.set_text_color(*self._text_color)
+        
+        # Simple list for skills to save space and look clean
+        skill_names = [s.name for s in skills]
+        self.multi_cell(0, 6, " | ".join(skill_names))
+        self.ln(5)
+
+    def draw_line(self, width=0.5):
+        self.set_draw_color(*self._brand_color)
+        self.set_line_width(width)
+        self.line(self.get_x(), self.get_y(), self.w - self.get_x() - 10, self.get_y())
+        self.ln(2)
+
+    def footer(self):
+        self.set_y(-15)
+        self.set_font("Helvetica", "I", 8)
+        self.set_text_color(*self._secondary_text)
+        self.cell(0, 10, f"Page {self.page_no()} | Generated by LinkedIn Scraper Microservice", align="C")

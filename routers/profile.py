@@ -100,11 +100,16 @@ async def get_usage():
 @router.post("/v1/profile", response_model=ProfileResponse)
 async def scrape_profile(request: ProfileRequest, api_key: str = Depends(get_api_key)):
     from scraper.engine import ScraperEngine
+    from scraper.exporter import ProfileExporter
     engine = ScraperEngine()
+    exporter = ProfileExporter()
     stats = {"rateLimitRemaining": 999, "rateLimitReset": 0}
     
     try:
         data = await engine.scrape(request)
+        
+        # New: PDF Export
+        pdf_path = exporter.generate_pdf(data, request.url)
         
         return ProfileResponse(
             success=True,
@@ -112,7 +117,7 @@ async def scrape_profile(request: ProfileRequest, api_key: str = Depends(get_api
             rateLimitReset=stats["rateLimitReset"],
             data=data,
             error=None,
-            message="Profile scraped successfully"
+            message=f"Profile scraped and saved to {pdf_path}"
         )
     except Exception as e:
         import traceback
