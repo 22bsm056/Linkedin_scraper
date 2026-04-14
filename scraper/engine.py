@@ -1,5 +1,6 @@
 import asyncio
 import random
+import os
 from routers.profile import ProfileRequest, ExtractedData
 from scraper.browser import BrowserManager
 from scraper.parser import ProfileParser
@@ -12,40 +13,39 @@ class ScraperEngine:
             await manager.start()
             context, page = await manager.new_page()
 
-            # Step 1: Navigate to the profile URL
-            print(f"Navigating to: {request.url}")
+            # Step 1: Check session validity by visiting the feed
+            print("Checking session validity at https://www.linkedin.com/feed/...")
             try:
-                await page.goto(request.url, wait_until="networkidle", timeout=30000)
-            except Exception as e:
-                # networkidle can time out on heavy pages; fallback to domcontentloaded
-                print(f"networkidle timed out, retrying with domcontentloaded: {e}")
-                try:
-                    await page.goto(request.url, wait_until="domcontentloaded", timeout=15000)
-                    await asyncio.sleep(3)  # Allow redirects to settle
-                except Exception as e2:
-                    print(f"domcontentloaded also failed: {e2}")
-
-            # Step 2: Detect authwall — check URL AND raw page content
-            current_url = page.url
-            print(f"Final URL after navigation: {current_url}")
-
-            try:
-                raw_html = await page.content()
+                await page.goto("https://www.linkedin.com/feed/", wait_until="domcontentloaded", timeout=20000)
+                await asyncio.sleep(2)
             except Exception:
-                raw_html = ""
+                pass
 
-            authwall_detected = (
-                "authwall" in current_url
-                or "/login" in current_url
-                or "/join" in current_url
-                or "Join LinkedIn" in raw_html
-            )
+            async def check_is_logged_in():
+                # Check for common indicators of a logged-in state
+                # Often LinkedIn shows a 'Join' nudge even if logged in, so we check for Feed indicators
+                title = await page.title()
+                content = await page.content()
+                
+                is_feed = "feed" in page.url or "Feed" in title
+                has_nav = await page.query_selector("[data-testid='primary-nav']") is not None or await page.query_selector(".global-nav") is not None
+                
+                # If we see the feed or the nav, we are likely logged in
+                return is_feed and has_nav
 
-            print(f"Authwall detected: {authwall_detected}")
+            is_logged_in = await check_is_logged_in()
+            print(f"Logged in: {is_logged_in}")
 
-            # Step 3: If blocked, perform automated login
-            if authwall_detected:
-                print("Triggering automated login flow...")
+            # Step 2: If not logged in, perform automated login
+            if not is_logged_in:
+                print("Session expired or missing. Triggering automated login flow...")
+                if os.path.exists("session.json"):
+                    try:
+                        os.remove("session.json")
+                    except Exception:
+                        pass
+
+
                 from config import settings
                 if not settings.linkedin_email or not settings.linkedin_password:
                     raise Exception(
@@ -140,13 +140,21 @@ class ScraperEngine:
                 detail_url = f"{base_url}/details/{category}/"
                 print(f"Navigating to detailed {category}: {detail_url}")
                 try:
-                    await page.goto(detail_url, wait_until="networkidle", timeout=20000)
+                    # Random delay between detail pages to avoid throttling
+                    await asyncio.sleep(random.uniform(2.0, 5.0))
+                    try:
+                        await page.goto(detail_url, wait_until="networkidle", timeout=30000)
+                    except Exception:
+                        await page.goto(detail_url, wait_until="domcontentloaded", timeout=20000)
+                        await asyncio.sleep(2)
+
                     await self._scroll_page(page)
                     category_html = await page.content()
-                    # Append unique sections to the full_html or handle separately
+                    # Append unique sections to the full_html
                     full_html += f"\n<!-- CATEGORY_{category.upper()} -->\n" + category_html
                 except Exception as e:
                     print(f"Could not load {category} details: {e}")
+
 
             with open("scraped.html", "w", encoding="utf-8") as f:
                 f.write(full_html)
